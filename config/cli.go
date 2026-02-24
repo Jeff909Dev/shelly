@@ -125,7 +125,9 @@ type configSavedMsg struct{}
 
 func saveConfig(config AppConfig) tea.Cmd {
 	return func() tea.Msg {
-		SaveAppConfig(config)
+		if err := SaveAppConfig(config); err != nil {
+			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
+		}
 		return configSavedMsg{}
 	}
 }

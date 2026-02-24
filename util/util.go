@@ -14,10 +14,19 @@ const (
 )
 
 func StartsWithCodeBlock(s string) bool {
-	if len(s) <= 3 {
-		return strings.Repeat("`", len(s)) == s
+	n := len(s)
+	if n == 0 {
+		return false
 	}
-	return strings.HasPrefix(s, "```")
+	if n <= 3 {
+		for i := 0; i < n; i++ {
+			if s[i] != '`' {
+				return false
+			}
+		}
+		return true
+	}
+	return s[0] == '`' && s[1] == '`' && s[2] == '`'
 }
 
 func ExtractFirstCodeBlock(s string) (content string, isOnlyCode bool) {

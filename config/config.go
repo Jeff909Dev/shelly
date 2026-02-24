@@ -28,7 +28,7 @@ var backupConfigFilePath string = ".shelly-ai/.backup-config.yaml"
 func FullFilePath(relativeFilePath string) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("error getting home directory: %s", err)
+		return "", fmt.Errorf("error getting home directory: %w", err)
 	}
 	configFilePath := filepath.Join(homeDir, relativeFilePath)
 	return configFilePath, nil
@@ -37,7 +37,7 @@ func FullFilePath(relativeFilePath string) (string, error) {
 func LoadAppConfig() (config AppConfig, err error) {
 	filePath, err := FullFilePath(configFilePath)
 	if err != nil {
-		return config, fmt.Errorf("error getting config file path: %s", err)
+		return config, fmt.Errorf("error getting config file path: %w", err)
 	}
 
 	// if file doesn't exist, create it with defaults
@@ -57,8 +57,14 @@ func ResetAppConfigToDefault() error {
 }
 
 func RevertAppConfigToBackup() error {
-	fullConfigPath, _ := FullFilePath(configFilePath)
-	fullBackupConfigPath, _ := FullFilePath(backupConfigFilePath)
+	fullConfigPath, err := FullFilePath(configFilePath)
+	if err != nil {
+		return fmt.Errorf("error getting config path: %w", err)
+	}
+	fullBackupConfigPath, err := FullFilePath(backupConfigFilePath)
+	if err != nil {
+		return fmt.Errorf("error getting backup path: %w", err)
+	}
 
 	// delete the file if it exists
 	if err := os.Remove(fullConfigPath); !os.IsNotExist(err) && err != nil {
@@ -75,7 +81,7 @@ func createConfigWithDefaults(filePath string) (AppConfig, error) {
 	config := AppConfig{}
 	err := yaml.Unmarshal(embeddedConfigFile, &config)
 	if err != nil {
-		return config, fmt.Errorf("error unmarshalling embedded config: %s", err)
+		return config, fmt.Errorf("error unmarshalling embedded config: %w", err)
 	}
 	// set default model to legacy option (for backwards compat)
 	modelOverride := os.Getenv("OPENAI_MODEL_OVERRIDE")
@@ -90,11 +96,11 @@ func loadExistingConfig(filePath string) (AppConfig, error) {
 	config := AppConfig{}
 	yamlFile, err := os.ReadFile(filePath)
 	if err != nil {
-		return config, fmt.Errorf("error reading config file: %s", err)
+		return config, fmt.Errorf("error reading config file: %w", err)
 	}
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
-		return config, fmt.Errorf("error unmarshalling config file: %s", err)
+		return config, fmt.Errorf("error unmarshalling config file: %w", err)
 	}
 	return config, nil
 }
@@ -102,36 +108,42 @@ func loadExistingConfig(filePath string) (AppConfig, error) {
 func SaveBackupConfig(config AppConfig) error {
 	filePath, err := FullFilePath(backupConfigFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting backup path: %w", err)
 	}
 	configData, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("error marshalling config: %s", err)
+		return fmt.Errorf("error marshalling config: %w", err)
 	}
-
 	err = os.WriteFile(filePath, configData, 0644)
 	if err != nil {
-		return fmt.Errorf("error writing config to file: %s", err)
+		return fmt.Errorf("error writing backup config: %w", err)
 	}
 	return nil
 }
 
 func writeConfigToFile(config AppConfig) error {
-	filePath, _ := FullFilePath(configFilePath)
+	filePath, err := FullFilePath(configFilePath)
+	if err != nil {
+		return fmt.Errorf("error getting config file path: %w", err)
+	}
 	// Create all directories in the filepath
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("error creating directories: %s", err)
+		return fmt.Errorf("error creating directories: %w", err)
 	}
 	configData, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("error marshalling config: %s", err)
+		return fmt.Errorf("error marshalling config: %w", err)
 	}
 
 	err = os.WriteFile(filePath, configData, 0644)
 	if err != nil {
-		return fmt.Errorf("error writing config to file: %s", err)
+		return fmt.Errorf("error writing config to file: %w", err)
 	}
-	SaveBackupConfig(config)
+	// Reuse already-marshaled data for backup to avoid double marshaling
+	backupPath, err := FullFilePath(backupConfigFilePath)
+	if err == nil {
+		_ = os.WriteFile(backupPath, configData, 0644)
+	}
 	return nil
 }

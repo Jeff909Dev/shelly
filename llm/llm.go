@@ -3,6 +3,7 @@ package llm
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ type LLMClient struct {
 	messages []Message
 
 	StreamCallback func(string, error)
+	Cancel         context.CancelFunc
 
 	httpClient *http.Client
 }
@@ -31,12 +33,12 @@ func NewLLMClient(config ModelConfig) *LLMClient {
 	}
 }
 
-func (c *LLMClient) createRequest(payload Payload) (*http.Request, error) {
+func (c *LLMClient) createRequest(ctx context.Context, payload Payload) (*http.Request, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
-	req, err := http.NewRequest("POST", c.config.Endpoint, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.config.Endpoint, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -108,7 +110,9 @@ func (c *LLMClient) processStream(resp *http.Response) (string, error) {
 }
 
 func (c *LLMClient) callStream(payload Payload) (Message, error) {
-	req, err := c.createRequest(payload)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	c.Cancel = cancel
+	req, err := c.createRequest(ctx, payload)
 	if err != nil {
 		return Message{}, fmt.Errorf("failed to create the request: %w", err)
 	}
