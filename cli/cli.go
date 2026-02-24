@@ -129,7 +129,7 @@ func (m model) getConnectionError(err error) string {
 	styleGreen := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	styleDim := lipgloss.NewStyle().Faint(true).Width(m.maxWidth).PaddingLeft(2)
 	message := fmt.Sprintf("\n  %v\n\n%v\n",
-		styleRed.Render("Error: Failed to connect to OpenAI."),
+		styleRed.Render("Error: Failed to connect to LLM API."),
 		styleDim.Render(err.Error()))
 	if util.IsLikelyBillingError(err.Error()) {
 		message = fmt.Sprintf("%v\n  %v %v\n\n  %v%v\n\n",
@@ -313,6 +313,19 @@ func printAPIKeyNotSetMessage(modelConfig ModelConfig) {
 	%s
 	4. (Recommended) Add that ^ line to your %s file.`, shellSyntax, profileScriptName)
 
+		msg2, _ := r.Render(message_string)
+		fmt.Printf("\n  %v%v\n", msg1, msg2)
+	case "ANTHROPIC_API_KEY":
+		msg1 := styleRed.Render("ANTHROPIC_API_KEY environment variable not set.")
+		anthropicShellSyntax := "\n```bash\nexport ANTHROPIC_API_KEY=[your key]\n```"
+		if runtime.GOOS == "windows" {
+			anthropicShellSyntax = "\n```powershell\n$env:ANTHROPIC_API_KEY = \"[your key]\"\n```"
+		}
+		message_string := fmt.Sprintf(`
+	1. Generate your API key at https://console.anthropic.com/settings/keys
+	2. Set your key by running:
+	%s
+	3. (Recommended) Add that ^ line to your %s file.`, anthropicShellSyntax, profileScriptName)
 		msg2, _ := r.Render(message_string)
 		fmt.Printf("\n  %v%v\n", msg1, msg2)
 	default:

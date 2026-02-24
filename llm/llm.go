@@ -15,6 +15,7 @@ import (
 type LLMClient struct {
 	config   ModelConfig
 	messages []Message
+	provider Provider
 
 	StreamCallback func(string, error)
 	Cancel         context.CancelFunc
@@ -26,6 +27,7 @@ func NewLLMClient(config ModelConfig) *LLMClient {
 	return &LLMClient{
 		config:   config,
 		messages: append([]Message(nil), config.Prompt...),
+		provider: detectProvider(config.Endpoint),
 
 		httpClient: &http.Client{
 			Timeout: time.Second * 120,
@@ -34,7 +36,11 @@ func NewLLMClient(config ModelConfig) *LLMClient {
 }
 
 func (c *LLMClient) createRequest(ctx context.Context, payload Payload) (*http.Request, error) {
-	payloadBytes, err := json.Marshal(payload)
+	body, err := c.provider.BuildRequestBody(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request body: %w", err)
+	}
+	payloadBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -42,14 +48,7 @@ func (c *LLMClient) createRequest(ctx context.Context, payload Payload) (*http.R
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	if strings.Contains(c.config.Endpoint, "openai.azure.com") {
-		req.Header.Set("Api-Key", c.config.Auth)
-	} else {
-		req.Header.Set("Authorization", "Bearer "+c.config.Auth)
-	}
-	if c.config.OrgID != "" {
-		req.Header.Set("OpenAI-Organization", c.config.OrgID)
-	}
+	c.provider.SetHeaders(req, c.config.Auth, c.config.OrgID)
 	req.Header.Set("Content-Type", "application/json")
 	return req, nil
 }
@@ -77,34 +76,50 @@ func (c *LLMClient) processStream(resp *http.Response) (string, error) {
 	counter := 0
 	streamReader := bufio.NewReader(resp.Body)
 	var buf strings.Builder
+	var currentEventType string
 	for {
 		line, err := streamReader.ReadString('\n')
 		if err != nil {
 			break
 		}
 		line = strings.TrimSpace(line)
-		if line == "data: [DONE]" {
+
+		// Track SSE event type lines
+		if strings.HasPrefix(line, "event:") {
+			currentEventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
+		if line == "" {
+			continue
+		}
+
+		content, isDone, shouldSkip := c.provider.ParseStreamLine(line, currentEventType)
+		currentEventType = ""
+		if isDone {
 			break
 		}
-		if strings.HasPrefix(line, "data:") {
-			payload := strings.TrimPrefix(line, "data:")
+		if shouldSkip {
+			continue
+		}
 
+		// For OpenAI, content is raw JSON that needs parsing
+		if _, ok := c.provider.(*OpenAIProvider); ok {
 			var responseData ResponseData
-			err = json.Unmarshal([]byte(payload), &responseData)
-			if err != nil {
+			if err := json.Unmarshal([]byte(content), &responseData); err != nil {
 				continue
 			}
 			if len(responseData.Choices) == 0 {
 				continue
 			}
-			content := responseData.Choices[0].Delta.Content
-			if counter < 2 && strings.Count(content, "\n") > 0 {
-				continue
-			}
-			buf.WriteString(content)
-			c.StreamCallback(buf.String(), nil)
-			counter++
+			content = responseData.Choices[0].Delta.Content
 		}
+
+		if counter < 2 && strings.Count(content, "\n") > 0 {
+			continue
+		}
+		buf.WriteString(content)
+		c.StreamCallback(buf.String(), nil)
+		counter++
 	}
 	return buf.String(), nil
 }
