@@ -521,6 +521,7 @@ func init() {
 var RootCmd = &cobra.Command{
 	Use:   "q [request]",
 	Short: "A command line interface for natural language queries",
+	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		// join args into a single string separated by spaces
 		prompt := strings.Join((args), " ")
