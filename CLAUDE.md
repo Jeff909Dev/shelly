@@ -14,14 +14,20 @@ go build ./...         # Verify all packages compile
 ## Project Structure
 
 ```
-main.go          → Entry point (delegates to cli.RootCmd)
-cli/cli.go       → Main TUI (Bubble Tea) - input, streaming, clipboard
-config/config.go → YAML config loading/saving (~/.shelly-ai/config.yaml)
-config/cli.go    → Config TUI menu
+main.go            → Entry point (delegates to cli.RootCmd)
+cli/cli.go         → Main TUI (Bubble Tea) - input, streaming, clipboard, history cmds
+config/config.go   → YAML config loading/saving (~/.shelly-ai/config.yaml)
+config/cli.go      → Config TUI menu (model selection, theme selection)
 config/config.yaml → Embedded default config
-llm/llm.go       → LLM HTTP client with SSE streaming
-types/types.go   → Shared types (ModelConfig, Message, Payload)
-util/util.go     → Terminal width, code extraction, browser open
+llm/llm.go         → LLM HTTP client with SSE streaming
+llm/provider.go    → Provider interface + detection (OpenAI, Anthropic, Gemini, Plugin)
+llm/provider_*.go  → Provider implementations
+types/types.go     → Shared types (ModelConfig, Message, Payload, Preferences)
+util/util.go       → Terminal width, code extraction, browser open
+theme/             → Theme system (6 built-in themes)
+history/           → Conversation history (JSONL storage)
+plugin/            → Plugin system (JSON-RPC 2.0 provider plugins)
+examples/          → Example plugin implementation
 ```
 
 ## Key Architecture Decisions
@@ -39,6 +45,18 @@ util/util.go     → Terminal width, code extraction, browser open
 - Errors in TUI rendering fall back to raw text display
 - Keep `types/` as a pure data package with no dependencies
 - Use `strings.Builder` for string concatenation in loops (never `+=`)
+
+## Testing
+
+```bash
+go test ./...          # Run all tests before commits
+go build ./...         # Verify compilation
+```
+
+- Use **table-driven tests** as the standard pattern
+- Test files: `llm/llm_test.go`, `llm/provider_test.go`, `util/util_test.go`, `config/config_test.go`
+- Use `httptest.NewServer` for testing streaming/HTTP behavior
+- Provider tests should cover `ParseStreamLine`, `BuildRequestBody`, and `SetHeaders`
 
 ## Common Pitfalls
 

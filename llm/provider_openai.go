@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"net/http"
 	. "q/types"
 	"strings"
@@ -30,5 +31,13 @@ func (p *OpenAIProvider) ParseStreamLine(line, eventType string) (string, bool, 
 	if !strings.HasPrefix(line, "data:") {
 		return "", false, true
 	}
-	return strings.TrimPrefix(line, "data:"), false, false
+	raw := strings.TrimPrefix(line, "data:")
+	var responseData ResponseData
+	if err := json.Unmarshal([]byte(raw), &responseData); err != nil {
+		return "", false, true
+	}
+	if len(responseData.Choices) == 0 {
+		return "", false, true
+	}
+	return responseData.Choices[0].Delta.Content, false, false
 }

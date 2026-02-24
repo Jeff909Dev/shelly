@@ -5,6 +5,7 @@ type ModelConfig struct {
 	Endpoint  string    `yaml:"endpoint"`
 	Auth      string    `yaml:"auth_env_var"`
 	OrgID     string    `yaml:"org_env_var,omitempty"`
+	Plugin    string    `yaml:"plugin,omitempty"`
 	Prompt    []Message `yaml:"prompt"`
 }
 
@@ -14,7 +15,10 @@ type Message struct {
 }
 
 type Preferences struct {
-	DefaultModel string `yaml:"default_model"`
+	DefaultModel   string `yaml:"default_model"`
+	Theme          string `yaml:"theme,omitempty"`
+	HistoryEnabled bool   `yaml:"history_enabled,omitempty"`
+	HistoryMaxDays int    `yaml:"history_max_days,omitempty"`
 }
 
 type Payload struct {

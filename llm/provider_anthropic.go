@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	. "q/types"
+	"strings"
 )
 
 type AnthropicProvider struct{}
@@ -64,8 +65,12 @@ func (p *AnthropicProvider) ParseStreamLine(line, eventType string) (string, boo
 		return "", false, true
 	}
 
+	// Strip SSE "data: " prefix before parsing JSON
+	data := strings.TrimPrefix(line, "data: ")
+	data = strings.TrimPrefix(data, "data:")
+
 	var event anthropicEvent
-	if err := json.Unmarshal([]byte(line), &event); err != nil {
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
 		return "", false, true
 	}
 	return event.Delta.Text, false, false

@@ -1,15 +1,20 @@
 package cli
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"q/config"
+	"q/history"
 	"q/llm"
+	"q/theme"
 	. "q/types"
 	"q/util"
 
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -24,7 +29,7 @@ type State int
 
 const (
 	Loading State = iota
-	RecevingInput
+	ReceivingInput
 	ReceivingResponse
 )
 
@@ -45,8 +50,11 @@ type model struct {
 
 	maxWidth int
 
-	runWithArgs bool
-	err         error
+	runWithArgs    bool
+	err            error
+	historyStore   *history.HistoryStore
+	historyEnabled bool
+	modelName      string
 }
 
 type responseMsg struct {
@@ -71,7 +79,7 @@ func makeQuery(client *llm.LLMClient, query string) tea.Cmd {
 // === Msg Handlers === //
 
 func (m model) handleKeyEnter() (tea.Model, tea.Cmd) {
-	if m.state != RecevingInput {
+	if m.state != ReceivingInput {
 		return m, nil
 	}
 	v := m.textInput.Value()
@@ -125,8 +133,8 @@ func (m model) formatResponse(response string, isCode bool) (string, error) {
 // TODO: parse the model endpoint to infer whether it's openai, other, or local.
 // for local, suggest it may not be running, and how to run it
 func (m model) getConnectionError(err error) string {
-	styleRed := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	styleGreen := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	styleRed := lipgloss.NewStyle().Foreground(theme.Current.Error)
+	styleGreen := lipgloss.NewStyle().Foreground(theme.Current.Success)
 	styleDim := lipgloss.NewStyle().Faint(true).Width(m.maxWidth).PaddingLeft(2)
 	message := fmt.Sprintf("\n  %v\n\n%v\n",
 		styleRed.Render("Error: Failed to connect to LLM API."),
@@ -148,7 +156,7 @@ func (m model) handleResponseMsg(msg responseMsg) (tea.Model, tea.Cmd) {
 
 	// error handling
 	if msg.err != nil {
-		m.state = RecevingInput
+		m.state = ReceivingInput
 		message := m.getConnectionError(msg.err)
 		return m, tea.Sequence(tea.Printf("%s", message), textinput.Blink)
 	}
@@ -169,8 +177,23 @@ func (m model) handleResponseMsg(msg responseMsg) (tea.Model, tea.Cmd) {
 		m.textInput.Placeholder = "Follow up, ENTER or CTRL+C to quit"
 	}
 
-	m.state = RecevingInput
+	m.state = ReceivingInput
 	m.latestCommandIsCode = isOnlyCode
+
+	// Save to history
+	if m.historyEnabled && m.historyStore != nil {
+		id := generateID()
+		_ = m.historyStore.Save(history.Conversation{
+			ID:        id,
+			Timestamp: time.Now(),
+			Model:     m.modelName,
+			Messages: []Message{
+				{Role: "user", Content: m.query},
+				{Role: "assistant", Content: msg.response},
+			},
+		})
+	}
+
 	message := formatted
 	return m, tea.Sequence(tea.Printf("%s", message), textinput.Blink)
 }
@@ -224,7 +247,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case Loading:
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
-	case RecevingInput:
+	case ReceivingInput:
 		m.textInput, cmd = m.textInput.Update(msg)
 		return m, cmd
 	}
@@ -235,7 +258,7 @@ func (m model) View() string {
 	switch m.state {
 	case Loading:
 		return m.spinner.View()
-	case RecevingInput:
+	case ReceivingInput:
 		return m.textInput.View()
 	case ReceivingResponse:
 		return m.formattedPartialResponse + "\n"
@@ -245,7 +268,7 @@ func (m model) View() string {
 
 // === Initial Model Setup === //
 
-func initialModel(prompt string, client *llm.LLMClient) model {
+func initialModel(prompt string, client *llm.LLMClient, histStore *history.HistoryStore, histEnabled bool, modelName string) model {
 	maxWidth := util.GetTermSafeMaxWidth()
 	ti := textinput.New()
 	ti.Placeholder = "Describe a shell command, or ask a question."
@@ -254,7 +277,7 @@ func initialModel(prompt string, client *llm.LLMClient) model {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Style = lipgloss.NewStyle().Foreground(theme.Current.Primary)
 
 	runWithArgs := prompt != ""
 
@@ -267,13 +290,16 @@ func initialModel(prompt string, client *llm.LLMClient) model {
 		markdownRenderer:      r,
 		textInput:             ti,
 		spinner:               s,
-		state:                 RecevingInput,
+		state:                 ReceivingInput,
 		query:                 "",
 		latestCommandResponse: "",
 		latestCommandIsCode:   false,
 		maxWidth:              maxWidth,
 		runWithArgs:           false,
 		err:                   nil,
+		historyStore:          histStore,
+		historyEnabled:        histEnabled,
+		modelName:             modelName,
 	}
 
 	if runWithArgs {
@@ -299,7 +325,7 @@ func printAPIKeyNotSetMessage(modelConfig ModelConfig) {
 		shellSyntax = "\n```powershell\n$env:OPENAI_API_KEY = \"[your key]\"\n```"
 	}
 
-	styleRed := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleRed := lipgloss.NewStyle().Foreground(theme.Current.Error)
 
 	switch auth {
 	case "OPENAI_API_KEY":
@@ -353,11 +379,43 @@ func getModelConfig(appConfig config.AppConfig) (ModelConfig, error) {
 	return appConfig.Models[0], nil
 }
 
+func generateID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func readStdin() string {
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return ""
+	}
+	// Read piped input, limit to 100KB
+	const maxSize = 100 * 1024
+	buf := make([]byte, maxSize)
+	n, _ := os.Stdin.Read(buf)
+	if n == 0 {
+		return ""
+	}
+	content := string(buf[:n])
+	// Reject likely binary content
+	for _, b := range content[:min(512, len(content))] {
+		if b == 0 {
+			return ""
+		}
+	}
+	return content
+}
+
 func runQProgram(prompt string) {
 	appConfig, err := config.LoadAppConfig()
 	if err != nil {
 		config.PrintConfigErrorMessage(err)
 		os.Exit(1)
+	}
+
+	if appConfig.Preferences.Theme != "" {
+		theme.LoadTheme(appConfig.Preferences.Theme)
 	}
 
 	modelConfig, err := getModelConfig(appConfig)
@@ -378,13 +436,135 @@ func runQProgram(prompt string) {
 	modelConfig.Auth = auth
 	modelConfig.OrgID = orgID
 
+	// Set up history
+	var histStore *history.HistoryStore
+	histEnabled := appConfig.Preferences.HistoryEnabled
+	if histEnabled {
+		histStore, _ = history.NewStore()
+		if histStore != nil && appConfig.Preferences.HistoryMaxDays > 0 {
+			_ = histStore.Prune(appConfig.Preferences.HistoryMaxDays)
+		}
+	}
+
 	c := llm.NewLLMClient(modelConfig)
-	p := tea.NewProgram(initialModel(prompt, c))
+	p := tea.NewProgram(initialModel(prompt, c, histStore, histEnabled, modelConfig.ModelName))
 	c.StreamCallback = streamHandler(p)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
+}
+
+var historyCmd = &cobra.Command{
+	Use:   "history",
+	Short: "View conversation history",
+	Run: func(cmd *cobra.Command, args []string) {
+		store, err := history.NewStore()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		convs, err := store.List(20)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(convs) == 0 {
+			fmt.Println("No history yet.")
+			return
+		}
+		for _, c := range convs {
+			query := c.Messages[0].Content
+			if len(query) > 60 {
+				query = query[:60] + "..."
+			}
+			fmt.Printf("  %s  %s  %s  %s\n",
+				lipgloss.NewStyle().Foreground(theme.Current.Muted).Render(c.ID),
+				lipgloss.NewStyle().Foreground(theme.Current.Muted).Render(c.Timestamp.Format("2006-01-02 15:04")),
+				lipgloss.NewStyle().Foreground(theme.Current.Accent).Render(c.Model),
+				query,
+			)
+		}
+	},
+}
+
+var historySearchCmd = &cobra.Command{
+	Use:   "search [query]",
+	Short: "Search conversation history",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		store, err := history.NewStore()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		results, err := store.Search(strings.Join(args, " "))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(results) == 0 {
+			fmt.Println("No matches found.")
+			return
+		}
+		for _, c := range results {
+			query := c.Messages[0].Content
+			if len(query) > 60 {
+				query = query[:60] + "..."
+			}
+			fmt.Printf("  %s  %s  %s\n",
+				lipgloss.NewStyle().Foreground(theme.Current.Muted).Render(c.ID),
+				lipgloss.NewStyle().Foreground(theme.Current.Accent).Render(c.Model),
+				query,
+			)
+		}
+	},
+}
+
+var historyShowCmd = &cobra.Command{
+	Use:   "show [id]",
+	Short: "Show a conversation",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		store, err := history.NewStore()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		conv, err := store.Show(args[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("ID: %s  Model: %s  Time: %s\n\n",
+			conv.ID, conv.Model, conv.Timestamp.Format("2006-01-02 15:04:05"))
+		for _, msg := range conv.Messages {
+			role := lipgloss.NewStyle().Bold(true).Render(msg.Role + ":")
+			fmt.Printf("%s %s\n\n", role, msg.Content)
+		}
+	},
+}
+
+var historyClearCmd = &cobra.Command{
+	Use:   "clear",
+	Short: "Clear all history",
+	Run: func(cmd *cobra.Command, args []string) {
+		store, err := history.NewStore()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if err := store.Clear(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("History cleared.")
+	},
+}
+
+func init() {
+	historyCmd.AddCommand(historySearchCmd, historyShowCmd, historyClearCmd)
+	RootCmd.AddCommand(historyCmd)
 }
 
 var RootCmd = &cobra.Command{
@@ -397,7 +577,13 @@ var RootCmd = &cobra.Command{
 			config.RunConfigProgram(args)
 			return
 		}
-		runQProgram(prompt)
 
+		// Check for piped stdin
+		stdinContent := readStdin()
+		if stdinContent != "" {
+			prompt = fmt.Sprintf("Input:\n```\n%s\n```\n\n%s", stdinContent, prompt)
+		}
+
+		runQProgram(prompt)
 	},
 }

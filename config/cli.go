@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"q/theme"
 	"q/types"
 	"q/util"
 	"strings"
@@ -18,15 +19,16 @@ import (
 
 const listHeight = 12
 
+func styleRed() lipgloss.Style    { return lipgloss.NewStyle().Foreground(theme.Current.Error) }
+func greyStyle() lipgloss.Style   { return lipgloss.NewStyle().Foreground(theme.Current.Muted) }
+func selectedStyle() lipgloss.Style { return lipgloss.NewStyle().PaddingLeft(2).Foreground(theme.Current.Accent) }
+
 var (
-	styleRed          = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	greyStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	titleStyle        = lipgloss.NewStyle().MarginLeft(2).Foreground(lipgloss.Color("240"))
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
-	quitTextStyle     = lipgloss.NewStyle().Faint(true).Margin(1, 0, 2, 4)
+	titleStyle      = lipgloss.NewStyle().MarginLeft(2).Foreground(lipgloss.Color("240"))
+	itemStyle       = lipgloss.NewStyle().PaddingLeft(4)
+	paginationStyle = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
+	helpStyle       = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
+	quitTextStyle   = lipgloss.NewStyle().Faint(true).Margin(1, 0, 2, 4)
 )
 
 // type item string
@@ -48,12 +50,12 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	if index == m.Index() {
 		fn = func(s ...string) string {
 
-			return selectedItemStyle.Render("> " + strings.Join(s, " "))
+			return selectedStyle().Render("> " + strings.Join(s, " "))
 		}
 	}
 	text := fn(i.title)
 	if i.data != "" {
-		text = fmt.Sprintf("%s %s", text, greyStyle.Render("("+i.data+")"))
+		text = fmt.Sprintf("%s %s", text, greyStyle().Render("("+i.data+")"))
 	}
 
 	fmt.Fprint(w, text)
@@ -261,7 +263,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case setDefaultModelMsg:
 		m.appConfig.Preferences.DefaultModel = msg.model
-		// fmt.Println("Config:", m.appConfig.Preferences.DefaultModel)
+		return m, tea.Sequence(saveConfig(m.appConfig), back())
+
+	case setThemeMsg:
+		m.appConfig.Preferences.Theme = msg.theme
+		theme.LoadTheme(msg.theme)
 		return m, tea.Sequence(saveConfig(m.appConfig), back())
 
 	case editorFinishedMsg:
@@ -323,12 +329,27 @@ func defaultList(title string, items []menuItem) list.Model {
 
 // func (m menuModel)
 
+type setThemeMsg struct{ theme string }
+
+func setTheme(name string) tea.Cmd {
+	return func() tea.Msg { return setThemeMsg{name} }
+}
+
 func mainMenu(appConfig AppConfig) list.Model {
+	currentTheme := appConfig.Preferences.Theme
+	if currentTheme == "" {
+		currentTheme = "default"
+	}
 	items := []menuItem{
 		{
 			title:     "Change Default Model",
 			data:      appConfig.Preferences.DefaultModel,
 			selectCmd: setMenu(defaultModelSelectMenu),
+		},
+		{
+			title:     "Change Theme",
+			data:      currentTheme,
+			selectCmd: setMenu(themeSelectMenu),
 		},
 		{
 			title:     "Edit Config File",
@@ -350,6 +371,18 @@ func mainMenu(appConfig AppConfig) list.Model {
 		},
 	}
 	return defaultList("Shelly AI Config", items)
+}
+
+func themeSelectMenu(appConfig AppConfig) list.Model {
+	var items []menuItem
+	for _, name := range theme.Names() {
+		name := name
+		items = append(items, menuItem{
+			title:     name,
+			selectCmd: tea.Sequence(setTheme(name), back()),
+		})
+	}
+	return defaultList("Choose Theme", items)
 }
 
 func defaultModelSelectMenu(appConfig AppConfig) list.Model {
@@ -415,14 +448,14 @@ func modelDetailsForModelMenu(appConfig AppConfig, modelConfig types.ModelConfig
 
 func PrintConfigErrorMessage(err error) {
 	maxWidth := util.GetTermSafeMaxWidth()
-	styleRed := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).PaddingLeft(2)
+	errStyle := styleRed().PaddingLeft(2)
 	styleDim := lipgloss.NewStyle().Faint(true).Width(maxWidth).PaddingLeft(2)
 
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 	)
 
-	msg1 := styleRed.Render("Failed to load config file.")
+	msg1 := errStyle.Render("Failed to load config file.")
 
 	filePath, _ := FullFilePath(configFilePath)
 	msg2 := styleDim.Render(err.Error())
@@ -449,11 +482,11 @@ func handleConfigResets(args []string) {
 		return
 	}
 
-	greyStylePadded := greyStyle.PaddingLeft(2)
+	greyStylePadded := greyStyle().PaddingLeft(2)
 	reader := bufio.NewReader(os.Stdin)
 
 	warningMessage, confirmationMessage := getMessages(args[1], greyStylePadded)
-	fmt.Print("\n" + styleRed.PaddingLeft(2).Render(warningMessage) + "\n\n" + confirmationMessage + " ")
+	fmt.Print("\n" + styleRed().PaddingLeft(2).Render(warningMessage) + "\n\n" + confirmationMessage + " ")
 
 	response, _ := reader.ReadString('\n')
 	response = strings.ToLower(strings.TrimSpace(response))
@@ -461,7 +494,7 @@ func handleConfigResets(args []string) {
 	if response == "yes" || response == "y" {
 		handleResetOrRevert(args[1])
 	} else {
-		fmt.Println("\n" + styleRed.PaddingLeft(2).Render("Operation cancelled.\n"))
+		fmt.Println("\n" + styleRed().PaddingLeft(2).Render("Operation cancelled.\n"))
 	}
 	os.Exit(0)
 }
@@ -496,10 +529,10 @@ func handleResetOrRevert(arg string) {
 	}
 
 	if err == nil {
-		fmt.Println("\n" + greyStyle.PaddingLeft(2).Render(message))
+		fmt.Println("\n" + greyStyle().PaddingLeft(2).Render(message))
 	} else {
-		fmt.Println("\n" + styleRed.PaddingLeft(2).Render("Operation failed.\n"))
-		fmt.Println("\n" + styleRed.PaddingLeft(2).Render(fmt.Sprintf("Error: %s\n", err)))
+		fmt.Println("\n" + styleRed().PaddingLeft(2).Render("Operation failed.\n"))
+		fmt.Println("\n" + styleRed().PaddingLeft(2).Render(fmt.Sprintf("Error: %s\n", err)))
 	}
 }
 

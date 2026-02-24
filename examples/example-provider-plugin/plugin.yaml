@@ -1,0 +1,3 @@
+name: example-echo
+type: provider
+executable: example-provider-plugin

@@ -102,18 +102,6 @@ func (c *LLMClient) processStream(resp *http.Response) (string, error) {
 			continue
 		}
 
-		// For OpenAI, content is raw JSON that needs parsing
-		if _, ok := c.provider.(*OpenAIProvider); ok {
-			var responseData ResponseData
-			if err := json.Unmarshal([]byte(content), &responseData); err != nil {
-				continue
-			}
-			if len(responseData.Choices) == 0 {
-				continue
-			}
-			content = responseData.Choices[0].Delta.Content
-		}
-
 		if counter < 2 && strings.Count(content, "\n") > 0 {
 			continue
 		}
