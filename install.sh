@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Replace these values with your tool's information:
-REPO_OWNER="ibigio"
-REPO_NAME="shell-ai"
-TOOL_NAME="shell-ai"
+REPO_OWNER="Jeff909Dev"
+REPO_NAME="shelly-ai"
+TOOL_NAME="shelly-ai"
 TOOL_SYMLINK="q"
 
 # Detect the platform (architecture and OS)

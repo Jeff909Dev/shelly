@@ -116,7 +116,7 @@ func openBrowser(url string) tea.Cmd {
 
 func openGithubRepo() tea.Cmd {
 	return func() tea.Msg {
-		util.OpenBrowser("https://github.com/ibigio/shell-ai?tab=readme-ov-file#contributing")
+		util.OpenBrowser("https://github.com/Jeff909Dev/shelly-ai?tab=readme-ov-file#contributing")
 		return nil
 	}
 }
@@ -330,7 +330,7 @@ func mainMenu(appConfig AppConfig) list.Model {
 		},
 		{
 			title:     "Edit Config File",
-			data:      "~/.shell-ai/config.yaml",
+			data:      "~/.shelly-ai/config.yaml",
 			selectCmd: openEditor(),
 		},
 		{
@@ -339,7 +339,7 @@ func mainMenu(appConfig AppConfig) list.Model {
 		},
 		{
 			title:     "Contribute",
-			selectCmd: openBrowser("https://github.com/ibigio/shell-ai#contributing"),
+			selectCmd: openBrowser("https://github.com/Jeff909Dev/shelly-ai#contributing"),
 		},
 		{
 			title:     "Quit",
@@ -347,7 +347,7 @@ func mainMenu(appConfig AppConfig) list.Model {
 			selectCmd: quit(),
 		},
 	}
-	return defaultList("ShellAI Config", items)
+	return defaultList("Shelly AI Config", items)
 }
 
 func defaultModelSelectMenu(appConfig AppConfig) list.Model {
@@ -374,12 +374,12 @@ func configureModelsMenu(appConfig AppConfig) list.Model {
 	modelItems = append(modelItems, menuItem{
 		title:     "Add Model",
 		data:      "coming soon!",
-		selectCmd: openBrowser("https://github.com/ibigio/shell-ai#custom-model-configuration-new"),
+		selectCmd: openBrowser("https://github.com/Jeff909Dev/shelly-ai#custom-model-configuration-new"),
 	})
 	modelItems = append(modelItems, menuItem{
 		title:     "Install Model",
 		data:      "coming soon!",
-		selectCmd: openBrowser("https://github.com/ibigio/shell-ai#custom-model-configuration-new"),
+		selectCmd: openBrowser("https://github.com/Jeff909Dev/shelly-ai#custom-model-configuration-new"),
 	})
 	return defaultList("Configure Models (coming soon!)", modelItems)
 }

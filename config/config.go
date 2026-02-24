@@ -22,8 +22,8 @@ type AppConfig struct {
 
 //go:embed config.yaml
 var embeddedConfigFile []byte
-var configFilePath string = ".shell-ai/config.yaml"
-var backupConfigFilePath string = ".shell-ai/.backup-config.yaml"
+var configFilePath string = ".shelly-ai/config.yaml"
+var backupConfigFilePath string = ".shelly-ai/.backup-config.yaml"
 
 func FullFilePath(relativeFilePath string) (string, error) {
 	homeDir, err := os.UserHomeDir()

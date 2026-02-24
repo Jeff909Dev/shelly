@@ -108,8 +108,7 @@ func (m model) formatResponse(response string, isCode bool) (string, error) {
 	// format nicely
 	formatted, err := m.markdownRenderer.Render(response)
 	if err != nil {
-		// TODO: handle error
-		panic(err)
+		return response, nil
 	}
 
 	// trim preceding and trailing newlines
@@ -160,11 +159,7 @@ func (m model) handleResponseMsg(msg responseMsg) (tea.Model, tea.Cmd) {
 		m.latestCommandResponse = content
 	}
 
-	formatted, err := m.formatResponse(msg.response, util.StartsWithCodeBlock(msg.response))
-	if err != nil {
-		// TODO: handle error
-		panic(err)
-	}
+	formatted, _ := m.formatResponse(msg.response, util.StartsWithCodeBlock(msg.response))
 
 	m.textInput.Placeholder = "Follow up, ENTER to copy & quit, CTRL+C to quit"
 	if !isOnlyCode {
@@ -183,11 +178,7 @@ func (m model) handleResponseMsg(msg responseMsg) (tea.Model, tea.Cmd) {
 func (m model) handlePartialResponseMsg(msg partialResponseMsg) (tea.Model, tea.Cmd) {
 	m.state = ReceivingResponse
 	isCode := util.StartsWithCodeBlock(msg.content)
-	formatted, err := m.formatResponse(msg.content, isCode)
-	if err != nil {
-		// TODO: handle error
-		panic(err)
-	}
+	formatted, _ := m.formatResponse(msg.content, isCode)
 	m.formattedPartialResponse = formatted
 	return m, nil
 }

@@ -74,7 +74,7 @@ func (c *LLMClient) Query(query string) (string, error) {
 func (c *LLMClient) processStream(resp *http.Response) (string, error) {
 	counter := 0
 	streamReader := bufio.NewReader(resp.Body)
-	totalData := ""
+	var buf strings.Builder
 	for {
 		line, err := streamReader.ReadString('\n')
 		if err != nil {
@@ -90,7 +90,6 @@ func (c *LLMClient) processStream(resp *http.Response) (string, error) {
 			var responseData ResponseData
 			err = json.Unmarshal([]byte(payload), &responseData)
 			if err != nil {
-				fmt.Println("Error parsing data:", err)
 				continue
 			}
 			if len(responseData.Choices) == 0 {
@@ -100,12 +99,12 @@ func (c *LLMClient) processStream(resp *http.Response) (string, error) {
 			if counter < 2 && strings.Count(content, "\n") > 0 {
 				continue
 			}
-			totalData += content
-			c.StreamCallback(totalData, nil)
+			buf.WriteString(content)
+			c.StreamCallback(buf.String(), nil)
 			counter++
 		}
 	}
-	return totalData, nil
+	return buf.String(), nil
 }
 
 func (c *LLMClient) callStream(payload Payload) (Message, error) {

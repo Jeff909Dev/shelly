@@ -64,8 +64,14 @@ func ExtractFirstCodeBlock(s string) (content string, isOnlyCode bool) {
 func GetTermSafeMaxWidth() int {
 	maxWidth := TermMaxWidth
 	termWidth, err := getTermWidth()
-	if err != nil || termWidth < maxWidth {
+	if err != nil {
+		return maxWidth
+	}
+	if termWidth < maxWidth {
 		maxWidth = termWidth - TermSafeZonePadding
+	}
+	if maxWidth < 20 {
+		maxWidth = 20
 	}
 	return maxWidth
 }

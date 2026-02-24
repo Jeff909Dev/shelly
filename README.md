@@ -1,44 +1,53 @@
-<img width="1280" alt="Frame 7" src="https://github.com/ibigio/shell-ai/assets/25421602/8bbb4ed9-99e3-42df-9a79-dc101dc693ad">
+<p align="center">
+  <pre align="center">
+   _____ _          _ _            _    ___
+  / ____| |        | | |          / \  |_ _|
+ | (___ | |__   ___| | |_   _   / _ \  | |
+  \___ \| '_ \ / _ \ | | | | | / ___ \ | |
+  ____) | | | |  __/ | | |_| |/ /   \ \|___|
+ |_____/|_| |_|\___|_|_|\__, /_/     \_\
+                         |___/
+  </pre>
+</p>
 
-# ShellAI
+<h1 align="center">Shelly AI</h1>
+<p align="center">A delightfully minimal, yet remarkably powerful AI Shell Assistant.</p>
 
-A delightfully minimal, yet remarkably powerful AI Shell Assistant.
-
-![shell-ai-demo](https://github.com/ibigio/shell-ai/assets/25421602/f480db5d-3787-49d8-b1bc-a027f65858e6)
+<p align="center">
+<a href="https://github.com/Jeff909Dev/shelly-ai"><img src="https://img.shields.io/github/stars/Jeff909Dev/shelly-ai?style=for-the-badge" alt="GitHub Stars"></a>
+<a href="https://github.com/Jeff909Dev/shelly-ai/releases"><img src="https://img.shields.io/github/v/release/Jeff909Dev/shelly-ai?style=for-the-badge" alt="Latest Release"></a>
+<a href="https://github.com/Jeff909Dev/shelly-ai/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Jeff909Dev/shelly-ai?style=for-the-badge" alt="License"></a>
+</p>
 
 > "Ten minutes of Googling is now ten seconds in the terminal."
 >
 > ~ Joe C.
 
-<p align="center">
-<a href="https://twitter.com/ilanbigio"><img src="https://img.shields.io/twitter/follow/ilanbigio?style=for-the-badge&logo=twitter" alt="Twitter Follow"></a>
-</p>
-
 # About
 
-For developers, referencing things online is inevitable – but one can only look up "how to do [X] in git" so many times before losing your mind.
+For developers, referencing things online is inevitable – but one can only look up "how to do [X] in git" so many times before losing your mind.
 
 <p align="center">
   <img src="https://imgs.xkcd.com/comics/tar.png">
 </p>
 
-**ShellAI** is meant to be a faster and smarter alternative to online reference: for shell commands, code examples, error outputs, and high-level explanations. We believe tools should be beautiful, minimal, and convenient, to let you get back to what you were doing as quickly and pleasantly as possible. That is the purpose of ShellAI.
+**Shelly AI** is meant to be a faster and smarter alternative to online reference: for shell commands, code examples, error outputs, and high-level explanations. We believe tools should be beautiful, minimal, and convenient, to let you get back to what you were doing as quickly and pleasantly as possible. That is the purpose of Shelly AI.
 
-_New: ShellAI now supports local models! See [Custom Model Configuration](#custom-model-configuration-new) for more._
+_New: Shelly AI now supports local models! See [Custom Model Configuration](#custom-model-configuration-new) for more._
 
 # Install
 
 ### Homebrew
 
 ```bash
-brew tap ibigio/tap
-brew install shell-ai
+brew tap Jeff909Dev/tap
+brew install shelly-ai
 ```
 
 ### Linux
 
 ```bash
-curl https://raw.githubusercontent.com/ibigio/shell-ai/main/install.sh | bash
+curl https://raw.githubusercontent.com/Jeff909Dev/shelly-ai/main/install.sh | bash
 ```
 
 # Usage
@@ -112,7 +121,7 @@ def date_generator(start_date, end_date):
 
 # Custom Model Configuration (New!)
 
-You can now configure model prompts and even add your own model setups in the `~/.shell-ai/config.yaml` file! ShellAI _should_ support any model that can be accessed through a chat-like endpoint... including local OSS models.
+You can now configure model prompts and even add your own model setups in the `~/.shelly-ai/config.yaml` file! Shelly AI _should_ support any model that can be accessed through a chat-like endpoint... including local OSS models.
 
 (I'm working on making config entirely possible through `q config`, but until then you'll have to edit the file directly.)
 
@@ -157,7 +166,7 @@ Here's what I did:
 ./server -m models/stablelm-zephyr-3b.Q8_0.gguf --host 0.0.0.0 --port 8080
 ```
 
-4. Finally I added the new `model` config to my `~/.shell-ai/config.yaml`, and wrestled with the prompt until it worked – bet you can do better. (As you can see, YAML is [flexible](https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html).)
+4. Finally I added the new `model` config to my `~/.shelly-ai/config.yaml`, and wrestled with the prompt until it worked – bet you can do better. (As you can see, YAML is [flexible](https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html).)
 
 ````yaml
 models:
@@ -200,7 +209,7 @@ preferences:
   default_model: stablelm-zephyr-3b.Q8_0
 ```
 
-And huzzah! You can now use ShellAI on a plane.
+And huzzah! You can now use Shelly AI on a plane.
 
 (Fun fact, I implemented a good bit of the initial config TUI on a plane using this exact local model.)
 
@@ -219,15 +228,15 @@ models:
 
 Great! Means you're having fun.
 
-`q config revert` will revert it back to the latest working version you had. (ShellAI automatically saves backups on successful updates.) Wish more tools had this.
+`q config revert` will revert it back to the latest working version you had. (Shelly AI automatically saves backups on successful updates.) Wish more tools had this.
 
 `q config reset` will nuke it to the (latest) default config.
 
 # Contributing
 
-Now that `~/.shell-ai/config.yaml` is set up, there's so much to do! I'm open to any feature ideas you might want to add, but am generally focused on two efforts:
+Now that `~/.shelly-ai/config.yaml` is set up, there's so much to do! I'm open to any feature ideas you might want to add, but am generally focused on two efforts:
 
 1. Building out the config TUI so you never have to edit the file directly (along with other nice features like re-using prompts, etc), and
-2. Setting up model install templates – think an (immutable) templates file where people can configure the model config and install steps, so someone can just go like `go config` -> `Install Model` -> pick one, and start using it.
+2. Setting up model install templates – think an (immutable) templates file where people can configure the model config and install steps, so someone can just go like `q config` -> `Install Model` -> pick one, and start using it.
 
-Like I said, if you have other ideas, or just want to say hi, go ahead and reach out! [@ilanbigio](https://twitter.com/ilanbigio) :)
+If you have ideas, or just want to say hi, go ahead and reach out! Contributions welcome at [GitHub](https://github.com/Jeff909Dev/shelly-ai) :)

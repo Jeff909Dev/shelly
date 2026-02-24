@@ -16,17 +16,17 @@ builds:
       - darwin
 
 brews:
-  - name: shell-ai
-    homepage: "https://github.com/ibigio/shell-ai"
+  - name: shelly-ai
+    homepage: "https://github.com/Jeff909Dev/shelly-ai"
     repository:
-      owner: ibigio
+      owner: Jeff909Dev
       name: homebrew-tap
     commit_author:
-      name: ibigio
-      email: ilanbigio@gmail.com
+      name: Jeff909Dev
+      email: jeff909dev@users.noreply.github.com
     install: |
-      bin.install "shell-ai"
-      bin.install_symlink "shell-ai" => "q"
+      bin.install "shelly-ai"
+      bin.install_symlink "shelly-ai" => "q"
 
 archives:
   - format: tar.gz

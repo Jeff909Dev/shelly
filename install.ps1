@@ -1,19 +1,19 @@
 param(
-    [string]$repoowner = "ibigio",
-    [string]$reponame = "shell-ai",
-    [string]$toolname = "shell-ai",
+    [string]$repoowner = "Jeff909Dev",
+    [string]$reponame = "shelly-ai",
+    [string]$toolname = "shelly-ai",
     [string]$toolsymlink = "q",
     [switch]$help
 )
 
 if ($help) {
-    Write-Host "shell-ai Installer Help!"
+    Write-Host "shelly-ai Installer Help!"
     Write-Host " Usage: "
-    Write-Host "    shell-ai -help <Shows this message>"
-    Write-Host "    shell-ai -repoowner <Owner of the repo>"
-    Write-Host "    shell-ai -reponame <Set the repository name we will look for>"
-    Write-Host "    shell-ai -toolname <Set the name of the tool (inside the .zip build)>"
-    Write-Host "    shell-ai -toolsymlink <Set name of the local executable>"
+    Write-Host "    shelly-ai -help <Shows this message>"
+    Write-Host "    shelly-ai -repoowner <Owner of the repo>"
+    Write-Host "    shelly-ai -reponame <Set the repository name we will look for>"
+    Write-Host "    shelly-ai -toolname <Set the name of the tool (inside the .zip build)>"
+    Write-Host "    shelly-ai -toolsymlink <Set name of the local executable>"
 
     exit 0
 }
@@ -64,19 +64,19 @@ $extractedDir = "${toolname}-temp"
 Expand-Archive -Path "${toolname}.zip" -DestinationPath $extractedDir -Force
 
 # check if the file already exists
-$toolPath = "C:\Program Files\shell-ai\${toolsymlink}.exe"
+$toolPath = "C:\Program Files\shelly-ai\${toolsymlink}.exe"
 if (Test-Path $toolPath) {
     Remove-Item $toolPath
 } else {
-    New-Item -ItemType Directory -Path "C:\Program Files\shell-ai\"
+    New-Item -ItemType Directory -Path "C:\Program Files\shelly-ai\"
 }
 
 # Add the file to path
 $currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
 
 # Append the desired path to the current PATH value if it's not already present
-if (-not ($currentPath -split ";" | Select-String -SimpleMatch "C:\Program Files\shell-ai\")) {
-    $updatedPath = $currentPath + ";" + "C:\Program Files\shell-ai\"
+if (-not ($currentPath -split ";" | Select-String -SimpleMatch "C:\Program Files\shelly-ai\")) {
+    $updatedPath = $currentPath + ";" + "C:\Program Files\shelly-ai\"
 
     # Set the updated PATH value
     [System.Environment]::SetEnvironmentVariable("PATH", $updatedPath, "User")   # Use "User" instead of "Machine" for user-level PATH
