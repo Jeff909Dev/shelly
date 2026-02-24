@@ -6,12 +6,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"q/theme"
 	"q/types"
 	"q/util"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -138,6 +140,12 @@ func updateConfig(config AppConfig) tea.Cmd {
 	return func() tea.Msg { return updateConfigMsg{config} }
 }
 
+type setupSelectModelMsg struct {
+	envVar   string
+	model    string
+	keyURL   string
+}
+
 type setDefaultModelMsg struct {
 	model string
 }
@@ -183,6 +191,7 @@ type page int
 
 const (
 	ListPage page = iota
+	TextInputPage
 )
 
 type state struct {
@@ -195,7 +204,8 @@ type state struct {
 type model struct {
 	state state
 
-	list list.Model
+	list      list.Model
+	textInput textinput.Model
 
 	dirty     bool
 	backstack []state
@@ -203,6 +213,13 @@ type model struct {
 	appConfig AppConfig
 
 	quitting bool
+
+	// wizard state
+	wizardMode   bool
+	wizardEnvVar string
+	wizardModel  string
+	wizardKeyURL string
+	wizardResult string
 }
 
 func (m model) Init() tea.Cmd {
@@ -246,6 +263,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, quit()
 
 		case tea.KeyEnter:
+			if m.state.page == TextInputPage {
+				key := strings.TrimSpace(m.textInput.Value())
+				if key == "" {
+					return m, nil
+				}
+				result := writeKeyToShellProfile(m.wizardEnvVar, key)
+				m.appConfig.Preferences.DefaultModel = m.wizardModel
+				_ = SaveAppConfig(m.appConfig)
+				m.wizardResult = result
+				m.quitting = true
+				return m, tea.Quit
+			}
 			i, _ := m.list.SelectedItem().(menuItem)
 			return m, i.selectCmd
 
@@ -260,6 +289,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.backstack = append(m.backstack, m.state)
 		m.list = msg.menu(m.appConfig)
 		m.state = state{page: ListPage, menu: msg.menu}
+
+	case setupSelectModelMsg:
+		m.wizardEnvVar = msg.envVar
+		m.wizardModel = msg.model
+		m.wizardKeyURL = msg.keyURL
+		m.state.page = TextInputPage
+		ti := textinput.New()
+		ti.Placeholder = "Paste your API key here"
+		ti.Focus()
+		ti.Width = 60
+		ti.EchoMode = textinput.EchoPassword
+		m.textInput = ti
+		return m, textinput.Blink
 
 	case setDefaultModelMsg:
 		m.appConfig.Preferences.DefaultModel = msg.model
@@ -278,6 +320,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	if !m.quitting {
+		if m.state.page == TextInputPage {
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
+		}
 		m.list, cmd = m.list.Update(msg)
 	}
 	m.state.listIndex = m.list.Index()
@@ -290,8 +336,14 @@ func (m *model) handleSelect() {
 
 func (m model) View() string {
 	if m.quitting {
+		if m.wizardResult != "" {
+			return "\n" + m.wizardResult + "\n"
+		}
 		return ""
-		// return quitTextStyle.Render("Changes saved to ~/.shell-ai/config.yaml")
+	}
+	if m.state.page == TextInputPage {
+		prompt := fmt.Sprintf("\n  Paste your %s (get one at %s):\n\n  ", m.wizardEnvVar, m.wizardKeyURL)
+		return prompt + m.textInput.View() + "\n"
 	}
 	return "\n" + m.list.View()
 }
@@ -533,6 +585,100 @@ func handleResetOrRevert(arg string) {
 	} else {
 		fmt.Println("\n" + styleRed().PaddingLeft(2).Render("Operation failed.\n"))
 		fmt.Println("\n" + styleRed().PaddingLeft(2).Render(fmt.Sprintf("Error: %s\n", err)))
+	}
+}
+
+// === Setup Wizard === //
+
+type wizardProvider struct {
+	name   string
+	envVar string
+	keyURL string
+	models []string
+}
+
+var wizardProviders = []wizardProvider{
+	{"OpenAI", "OPENAI_API_KEY", "https://platform.openai.com/api-keys", []string{"gpt-4.1", "gpt-4.1-mini"}},
+	{"Claude", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys", []string{"claude-sonnet-4-5", "claude-opus-4-6"}},
+	{"Gemini", "GEMINI_API_KEY", "https://aistudio.google.com/apikey", []string{"gemini-2.5-flash", "gemini-2.5-pro"}},
+	{"Groq", "GROQ_API_KEY", "https://console.groq.com/keys", []string{"llama-3.3-70b-groq"}},
+}
+
+func setupSelectModel(envVar, modelName, keyURL string) tea.Cmd {
+	return func() tea.Msg {
+		return setupSelectModelMsg{envVar: envVar, model: modelName, keyURL: keyURL}
+	}
+}
+
+func setupProviderMenu(_ AppConfig) list.Model {
+	var items []menuItem
+	for _, p := range wizardProviders {
+		p := p
+		modelNames := strings.Join(p.models, ", ")
+		items = append(items, menuItem{
+			title:     p.name,
+			data:      modelNames,
+			selectCmd: setMenu(setupModelMenu(p)),
+		})
+	}
+	return defaultList("Welcome to Shelly AI! Choose your provider:", items)
+}
+
+func setupModelMenu(p wizardProvider) menuFunc {
+	return func(_ AppConfig) list.Model {
+		var items []menuItem
+		for _, m := range p.models {
+			m := m
+			items = append(items, menuItem{
+				title:     m,
+				selectCmd: setupSelectModel(p.envVar, m, p.keyURL),
+			})
+		}
+		return defaultList("Choose model:", items)
+	}
+}
+
+func writeKeyToShellProfile(envVar, key string) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Sprintf("  Error: %v", err)
+	}
+
+	shell := os.Getenv("SHELL")
+	profileName := ".bashrc"
+	if strings.Contains(shell, "zsh") {
+		profileName = ".zshrc"
+	}
+
+	profilePath := filepath.Join(homeDir, profileName)
+	line := fmt.Sprintf("\nexport %s=%s\n", envVar, key)
+
+	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Sprintf("  Error writing to %s: %v", profileName, err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(line); err != nil {
+		return fmt.Sprintf("  Error writing to %s: %v", profileName, err)
+	}
+
+	successStyle := lipgloss.NewStyle().Foreground(theme.Current.Success)
+	check := successStyle.Render("✓")
+	return fmt.Sprintf("  %s Key saved to ~/%s\n  %s Default model set\n\n  Run: source ~/%s && q hello",
+		check, profileName, check, profileName)
+}
+
+func RunSetupWizard(appConfig AppConfig) {
+	m := model{
+		appConfig:  appConfig,
+		list:       setupProviderMenu(appConfig),
+		state:      state{page: ListPage, menu: setupProviderMenu},
+		wizardMode: true,
+	}
+
+	if _, err := tea.NewProgram(m).Run(); err != nil {
+		fmt.Println("Error running setup wizard:", err)
+		os.Exit(1)
 	}
 }
 

@@ -12,7 +12,6 @@ import (
 	. "q/types"
 	"q/util"
 
-	"runtime"
 	"strings"
 	"time"
 
@@ -312,54 +311,6 @@ func initialModel(prompt string, client *llm.LLMClient, histStore *history.Histo
 
 // === Main === //
 
-func printAPIKeyNotSetMessage(modelConfig ModelConfig) {
-	auth := modelConfig.Auth
-	r, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-	)
-
-	profileScriptName := ".zshrc or.bashrc"
-	shellSyntax := "\n```bash\nexport OPENAI_API_KEY=[your key]\n```"
-	if runtime.GOOS == "windows" {
-		profileScriptName = "$profile"
-		shellSyntax = "\n```powershell\n$env:OPENAI_API_KEY = \"[your key]\"\n```"
-	}
-
-	styleRed := lipgloss.NewStyle().Foreground(theme.Current.Error)
-
-	switch auth {
-	case "OPENAI_API_KEY":
-		msg1 := styleRed.Render("OPENAI_API_KEY environment variable not set.")
-
-		// make it platform agnostic
-		message_string := fmt.Sprintf(`
-	1. Generate your API key at https://platform.openai.com/account/api-keys
-	2. Add your credit card in the API (for the free trial)
-	3. Set your key by running:
-	%s
-	4. (Recommended) Add that ^ line to your %s file.`, shellSyntax, profileScriptName)
-
-		msg2, _ := r.Render(message_string)
-		fmt.Printf("\n  %v%v\n", msg1, msg2)
-	case "ANTHROPIC_API_KEY":
-		msg1 := styleRed.Render("ANTHROPIC_API_KEY environment variable not set.")
-		anthropicShellSyntax := "\n```bash\nexport ANTHROPIC_API_KEY=[your key]\n```"
-		if runtime.GOOS == "windows" {
-			anthropicShellSyntax = "\n```powershell\n$env:ANTHROPIC_API_KEY = \"[your key]\"\n```"
-		}
-		message_string := fmt.Sprintf(`
-	1. Generate your API key at https://console.anthropic.com/settings/keys
-	2. Set your key by running:
-	%s
-	3. (Recommended) Add that ^ line to your %s file.`, anthropicShellSyntax, profileScriptName)
-		msg2, _ := r.Render(message_string)
-		fmt.Printf("\n  %v%v\n", msg1, msg2)
-	default:
-		msg := styleRed.Render(auth + " environment variable not set.")
-		fmt.Printf("\n  %v", msg)
-	}
-}
-
 func streamHandler(p *tea.Program) func(content string, err error) {
 	return func(content string, err error) {
 		p.Send(partialResponseMsg{content, err})
@@ -424,9 +375,9 @@ func runQProgram(prompt string) {
 		os.Exit(1)
 	}
 	auth := os.Getenv(modelConfig.Auth)
-	if auth == "" || os.Getenv(modelConfig.Auth) == "" {
-		printAPIKeyNotSetMessage(modelConfig)
-		os.Exit(1)
+	if auth == "" {
+		config.RunSetupWizard(appConfig)
+		return
 	}
 	// everything checks out, save the config
 	// TODO: maybe add a validating function
