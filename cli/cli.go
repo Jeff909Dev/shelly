@@ -376,8 +376,19 @@ func runQProgram(prompt string) {
 	}
 	auth := os.Getenv(modelConfig.Auth)
 	if auth == "" {
-		config.RunSetupWizard(appConfig)
-		return
+		envVar, key := config.RunSetupWizard(appConfig)
+		if envVar == "" || key == "" {
+			return
+		}
+		os.Setenv(envVar, key)
+		// Reload config since wizard may have changed default model
+		appConfig, _ = config.LoadAppConfig()
+		modelConfig, err = getModelConfig(appConfig)
+		if err != nil {
+			config.PrintConfigErrorMessage(err)
+			os.Exit(1)
+		}
+		auth = key
 	}
 	// everything checks out, save the config
 	// TODO: maybe add a validating function

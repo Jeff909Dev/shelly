@@ -219,6 +219,7 @@ type model struct {
 	wizardEnvVar string
 	wizardModel  string
 	wizardKeyURL string
+	wizardKey    string
 	wizardResult string
 }
 
@@ -271,6 +272,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				result := writeKeyToShellProfile(m.wizardEnvVar, key)
 				m.appConfig.Preferences.DefaultModel = m.wizardModel
 				_ = SaveAppConfig(m.appConfig)
+				m.wizardKey = key
 				m.wizardResult = result
 				m.quitting = true
 				return m, tea.Quit
@@ -651,14 +653,22 @@ func writeKeyToShellProfile(envVar, key string) string {
 	}
 
 	profilePath := filepath.Join(homeDir, profileName)
-	line := fmt.Sprintf("\nexport %s=%s\n", envVar, key)
+	exportLine := fmt.Sprintf("export %s=%s", envVar, key)
 
-	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Sprintf("  Error writing to %s: %v", profileName, err)
+	// Deduplicate: remove any existing export for this env var
+	existing, _ := os.ReadFile(profilePath)
+	var lines []string
+	for _, l := range strings.Split(string(existing), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(l), "export "+envVar+"=") {
+			lines = append(lines, l)
+		}
 	}
-	defer f.Close()
-	if _, err := f.WriteString(line); err != nil {
+	// Remove trailing empty lines, then add our export
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	lines = append(lines, "", exportLine, "")
+	if err := os.WriteFile(profilePath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		return fmt.Sprintf("  Error writing to %s: %v", profileName, err)
 	}
 
@@ -668,7 +678,8 @@ func writeKeyToShellProfile(envVar, key string) string {
 		check, profileName, check, profileName)
 }
 
-func RunSetupWizard(appConfig AppConfig) {
+// RunSetupWizard returns (envVar, key) on success so the caller can os.Setenv and continue.
+func RunSetupWizard(appConfig AppConfig) (string, string) {
 	m := model{
 		appConfig:  appConfig,
 		list:       setupProviderMenu(appConfig),
@@ -676,10 +687,15 @@ func RunSetupWizard(appConfig AppConfig) {
 		wizardMode: true,
 	}
 
-	if _, err := tea.NewProgram(m).Run(); err != nil {
+	result, err := tea.NewProgram(m).Run()
+	if err != nil {
 		fmt.Println("Error running setup wizard:", err)
 		os.Exit(1)
 	}
+	if final, ok := result.(model); ok && final.wizardEnvVar != "" {
+		return final.wizardEnvVar, final.wizardKey
+	}
+	return "", ""
 }
 
 func RunConfigProgram(args []string) {
