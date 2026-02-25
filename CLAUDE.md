@@ -8,6 +8,7 @@ AI-powered terminal assistant that converts natural language to shell commands.
 go build -o q .        # Build binary
 go build ./...         # Verify all packages compile
 ./q [request]          # Run with a query
+./q --suggest "git co" # Output command completion (for shell integration)
 ./q config             # Open config TUI
 ```
 
@@ -23,10 +24,11 @@ llm/llm.go         → LLM HTTP client with SSE streaming
 llm/provider.go    → Provider interface + detection (OpenAI, Anthropic, Gemini, Plugin)
 llm/provider_*.go  → Provider implementations
 types/types.go     → Shared types (ModelConfig, Message, Payload, Preferences)
-util/util.go       → Terminal width, code extraction, browser open
+util/util.go       → Terminal width, code extraction, browser open, shell context
 theme/             → Theme system (6 built-in themes)
 history/           → Conversation history (JSONL storage)
 plugin/            → Plugin system (JSON-RPC 2.0 provider plugins)
+completions/       → Zsh widget for inline ghost-text suggestions
 examples/          → Example plugin implementation
 ```
 
@@ -38,6 +40,8 @@ examples/          → Example plugin implementation
 - **Config stored at** `~/.shelly-ai/config.yaml` with automatic backup at `~/.shelly-ai/.backup-config.yaml`
 - **Binary name** is `shelly-ai` with symlink `q` for quick access
 - **Auth via env vars** — config stores env var *names* (e.g. `OPENAI_API_KEY`), not secrets
+- **Shell context injection** — `util.GetShellContext()` collects cwd/git/files, prepended to prompts like stdin piping
+- **`--suggest` mode** — bypasses Bubble Tea, outputs raw text for Zsh widget integration
 
 ## Code Style
 
