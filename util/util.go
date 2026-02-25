@@ -1,8 +1,11 @@
 package util
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/mattn/go-tty"
@@ -97,6 +100,63 @@ func getTermWidth() (width int, err error) {
 
 func IsLikelyBillingError(s string) bool {
 	return strings.Contains(s, "429 Too Many Requests")
+}
+
+func GetShellContext() string {
+	var parts []string
+
+	// Current directory
+	if cwd, err := os.Getwd(); err == nil {
+		parts = append(parts, "cwd: "+cwd)
+	}
+
+	// Git branch
+	if branch, err := exec.Command("git", "branch", "--show-current").Output(); err == nil {
+		b := strings.TrimSpace(string(branch))
+		if b != "" {
+			parts = append(parts, "branch: "+b)
+		}
+	}
+
+	// File listing (limit 30)
+	if entries, err := os.ReadDir("."); err == nil {
+		var names []string
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			name := e.Name()
+			if e.IsDir() {
+				name += "/"
+			}
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		if len(names) > 30 {
+			names = names[:30]
+		}
+		if len(names) > 0 {
+			parts = append(parts, "files: "+strings.Join(names, " "))
+		}
+	}
+
+	// Git status
+	if status, err := exec.Command("git", "status", "--short").Output(); err == nil {
+		s := strings.TrimSpace(string(status))
+		if s != "" {
+			// Compact: join lines with comma
+			lines := strings.Split(s, "\n")
+			if len(lines) > 10 {
+				lines = lines[:10]
+			}
+			parts = append(parts, "git: "+strings.Join(lines, ", "))
+		}
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("[Context] %s", strings.Join(parts, " | "))
 }
 
 func OpenBrowser(url string) error {

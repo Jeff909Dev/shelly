@@ -524,9 +524,48 @@ var historyClearCmd = &cobra.Command{
 	},
 }
 
+func runSuggest(prompt string) {
+	appConfig, err := config.LoadAppConfig()
+	if err != nil {
+		os.Exit(1)
+	}
+	modelConfig, err := getModelConfig(appConfig)
+	if err != nil {
+		os.Exit(1)
+	}
+	auth := os.Getenv(modelConfig.Auth)
+	if auth == "" {
+		os.Exit(1)
+	}
+	orgID := os.Getenv(modelConfig.OrgID)
+	modelConfig.Auth = auth
+	modelConfig.OrgID = orgID
+
+	// Override prompt to completion mode
+	modelConfig.Prompt = []Message{
+		{Role: "system", Content: "Complete this partial shell command. Output ONLY the completed command, nothing else. No markdown, no code blocks, no explanation."},
+	}
+
+	c := llm.NewLLMClient(modelConfig)
+	// Use a no-op stream callback
+	c.StreamCallback = func(s string, e error) {}
+	result, err := c.Query(prompt)
+	if err != nil {
+		os.Exit(1)
+	}
+	// Strip any accidental markdown
+	result = strings.TrimSpace(result)
+	result = strings.TrimPrefix(result, "```bash\n")
+	result = strings.TrimPrefix(result, "```\n")
+	result = strings.TrimSuffix(result, "\n```")
+	result = strings.TrimSuffix(result, "```")
+	fmt.Print(result)
+}
+
 func init() {
 	historyCmd.AddCommand(historySearchCmd, historyShowCmd, historyClearCmd)
 	RootCmd.AddCommand(historyCmd)
+	RootCmd.Flags().Bool("suggest", false, "Output a command completion suggestion (for shell integration)")
 }
 
 var RootCmd = &cobra.Command{
@@ -545,6 +584,18 @@ var RootCmd = &cobra.Command{
 		stdinContent := readStdin()
 		if stdinContent != "" {
 			prompt = fmt.Sprintf("Input:\n```\n%s\n```\n\n%s", stdinContent, prompt)
+		}
+
+		// Inject shell context
+		shellCtx := util.GetShellContext()
+		if shellCtx != "" {
+			prompt = shellCtx + "\n" + prompt
+		}
+
+		suggest, _ := cmd.Flags().GetBool("suggest")
+		if suggest {
+			runSuggest(prompt)
+			return
 		}
 
 		runQProgram(prompt)

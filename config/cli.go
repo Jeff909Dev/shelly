@@ -318,6 +318,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, quit()
 		}
+
+	case shellIntegrationMsg:
+		m.wizardResult = msg.result
+		m.quitting = true
+		return m, tea.Quit
 	}
 
 	var cmd tea.Cmd
@@ -413,6 +418,11 @@ func mainMenu(appConfig AppConfig) list.Model {
 		{
 			title:     "Configure Models",
 			selectCmd: setMenu(configureModelsMenu),
+		},
+		{
+			title:     "Install Shell Integration",
+			data:      "zsh inline suggestions",
+			selectCmd: installShellIntegration(),
 		},
 		{
 			title:     "Contribute",
@@ -676,6 +686,74 @@ func writeKeyToShellProfile(envVar, key string) string {
 	check := successStyle.Render("✓")
 	return fmt.Sprintf("  %s Key saved to ~/%s\n  %s Default model set\n\n  Run: source ~/%s && q hello",
 		check, profileName, check, profileName)
+}
+
+type shellIntegrationMsg struct{ result string }
+
+func installShellIntegration() tea.Cmd {
+	return func() tea.Msg {
+		result := doInstallShellIntegration()
+		return shellIntegrationMsg{result}
+	}
+}
+
+func doInstallShellIntegration() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Sprintf("  Error: %v", err)
+	}
+
+	shellyDir := filepath.Join(homeDir, ".shelly-ai")
+	destPath := filepath.Join(shellyDir, "shelly.zsh")
+
+	// Embedded widget script
+	widget := `# Shelly AI - Inline Zsh Suggestions
+_shelly_suggest() {
+  [[ ${#BUFFER} -lt 3 ]] && return
+  local suggestion
+  suggestion=$(q --suggest "$BUFFER" 2>/dev/null)
+  if [[ -n "$suggestion" && "$suggestion" != "$BUFFER" ]]; then
+    POSTDISPLAY="${suggestion#$BUFFER}"
+  else
+    POSTDISPLAY=""
+  fi
+}
+_shelly_accept() {
+  if [[ -n "$POSTDISPLAY" ]]; then
+    BUFFER="$BUFFER$POSTDISPLAY"
+    POSTDISPLAY=""
+    CURSOR=$#BUFFER
+  else
+    zle expand-or-complete
+  fi
+}
+zle -N _shelly_suggest
+zle -N _shelly_accept
+autoload -U add-zle-hook-widget
+add-zle-hook-widget line-pre-redraw _shelly_suggest
+bindkey '\es' _shelly_accept
+`
+
+	if err := os.WriteFile(destPath, []byte(widget), 0644); err != nil {
+		return fmt.Sprintf("  Error writing widget: %v", err)
+	}
+
+	// Add source line to .zshrc if not already present
+	sourceLine := "source ~/.shelly-ai/shelly.zsh"
+	zshrcPath := filepath.Join(homeDir, ".zshrc")
+	existing, _ := os.ReadFile(zshrcPath)
+	if !strings.Contains(string(existing), sourceLine) {
+		f, err := os.OpenFile(zshrcPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+		if err != nil {
+			return fmt.Sprintf("  Error updating .zshrc: %v", err)
+		}
+		defer f.Close()
+		f.WriteString("\n# Shelly AI inline suggestions\n" + sourceLine + "\n")
+	}
+
+	successStyle := lipgloss.NewStyle().Foreground(theme.Current.Success)
+	check := successStyle.Render("✓")
+	return fmt.Sprintf("  %s Installed to ~/.shelly-ai/shelly.zsh\n  %s Added source to ~/.zshrc\n\n  Run: source ~/.zshrc (or open a new terminal)\n  Use Alt+S to accept suggestions", check, check)
 }
 
 // RunSetupWizard returns (envVar, key) on success so the caller can os.Setenv and continue.
